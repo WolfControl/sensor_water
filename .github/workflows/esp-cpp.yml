@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: recursive
-          path: '/platformio'
+          #path: '/platformio'
       
       - uses: actions/setup-python@v4
         with:
@@ -26,4 +26,4 @@ jobs:
         run: pip install -U platformio
 
       - name: Build PlatformIO Project
-        run: pio ci -c platformio.ini /platformio
+        run: pio ci -c platformio.ini /home/runner/work/collector/collector
