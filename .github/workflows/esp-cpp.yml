@@ -28,8 +28,5 @@ jobs:
       - name: Install PlatformIO
         run: pip install -U platformio
 
-      - name: Testing
-        run: ls /home/runner/work/collector/collector
-
-#      - name: Build PlatformIO Project
-#        run: pio ci /home/runner/work/collector/collector
+      - name: Build PlatformIO Project
+        run: pio ci /home/runner/work/collector/collector
