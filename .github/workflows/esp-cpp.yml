@@ -24,5 +24,6 @@ jobs:
       - name: Install PlatformIO
         run: pip install -U platformio
 
+      # Working but fails to find wifi.h?
       - name: Build PlatformIO Project
         run: pio run
