@@ -14,6 +14,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          path: ~/collector
       - uses: actions/cache@v3
         with:
           path: |
@@ -29,4 +31,4 @@ jobs:
         run: pip install -U platformio
 
       - name: Build PlatformIO Project
-        run: pio ci -c platformio.ini ${{ GITHUB_WORKSPACE }}
+        run: pio ci -c platformio.ini ~/collector
