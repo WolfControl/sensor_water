@@ -38,22 +38,16 @@
 
 #define   HOSTNAME         "MQTT_Bridge"
 
-Scheduler userScheduler;   // to control your personal task
-
-painlessMesh  mesh;
-WiFiClient wifiClient;
-
 // Prototypes
 void receivedCallback( const uint32_t &from, const String &msg );
 void mqttCallback(char* topic, byte* payload, unsigned int length);
 
 IPAddress getlocalIP();
 IPAddress myIP(0,0,0,0);
+IPAddress mqttBroker(127,0,0,1);
 
+#define mqttPort 1883
 
-// GCP broker address and port
-char mqttBroker[]  = "34.135.33.166";
-#define MQTTPORT 1883
 
 // topic's suffix: everyone can publish/subscribe to this public broker,
 // you have to change the following 2 defines
@@ -62,157 +56,31 @@ char mqttBroker[]  = "34.135.33.166";
 
 #define PUBPLISHFROMGATEWAYSUFFIX  PUBPLISHSUFFIX "gateway"
 
-#define CHECKCONNDELTA 60     // check interval ( seconds ) for mqtt connection
+painlessMesh  mesh;
+WiFiClient wifiClient;
+PubSubClient mqttClient(mqttBroker, mqttPort, mqttCallback, wifiClient);
 
-PubSubClient mqttClient;
+//#define CHECKCONNDELTA 60     // check interval ( seconds ) for mqtt connection
+//Scheduler userScheduler;   // to control your personal task
 
-
-bool calc_delay = false;
-SimpleList<uint32_t> nodes;
-uint32_t nsent=0;
-char buff[512];
-uint32_t nexttime=0;
-uint8_t  initialized=0;
-
-
-// messages received from the mqtt broker
-void mqttCallback(char* topic, uint8_t* payload, unsigned int length) 
-  {
-  char* cleanPayload = (char*)malloc(length+1);
-  payload[length] = '\0';
-  memcpy(cleanPayload, payload, length+1);
-  String msg = String(cleanPayload);
-  free(cleanPayload);
-
-  Serial.printf("mc t:%s  p:%s\n", topic, payload);
-  
-  String targetStr = String(topic).substring(strlen(SUBSCRIBESUFFIX));
-  if(targetStr == "gateway")
-    {
-    if(msg == "getNodes")
-      {
-      auto nodes = mesh.getNodeList(true);
-      String str;
-      for (auto &&id : nodes)
-        str += String(id) + String(" ");
-      mqttClient.publish(PUBPLISHFROMGATEWAYSUFFIX, str.c_str());
-      }
-    }
-  else if(targetStr == "broadcast") 
-    {
-    mesh.sendBroadcast(msg);
-    }
-  else
-    {
-    uint32_t target = strtoul(targetStr.c_str(), NULL, 10);
-    if(mesh.isConnected(target))
-      {
-      mesh.sendSingle(target, msg);
-      }
-    else
-      {
-      mqttClient.publish(PUBPLISHFROMGATEWAYSUFFIX, "Client not connected!");
-      }
-    }
-  }
+//************************************************************
+// bingbong
+//************************************************************
 
 
-// messages received from painless mesh network
-void receivedCallback( const uint32_t &from, const String &msg ) 
-  {
-  Serial.printf("bridge: Received from %u msg=%s\n", from, msg.c_str());
-  String topic = PUBPLISHSUFFIX + String(from);
-  mqttClient.publish(topic.c_str(), msg.c_str());
-  }
+void my_setup() {
+  Serial.begin(115200);
+  ESP_LOGI("SETUP", "Initializing flash storage");
+  esp_err_t ret = nvs_flash_init();
 
+  ESP_LOGI("SETUP", "Starting painlessMesh MQTT bridge node");
 
-void newConnectionCallback(uint32_t nodeId) 
-  {
-  Serial.printf("--> Start: New Connection, nodeId = %u\n", nodeId);
-  Serial.printf("--> Start: New Connection, %s\n", mesh.subConnectionJson(true).c_str());
-  }
-
-
-void changedConnectionCallback() 
-  {
-  Serial.printf("Changed connections\n");
-
-  nodes = mesh.getNodeList();
-  Serial.printf("Num nodes: %d\n", nodes.size());
-  Serial.printf("Connection list:");
-  SimpleList<uint32_t>::iterator node = nodes.begin();
-  while (node != nodes.end()) 
-    {
-    Serial.printf(" %u", *node);
-    node++;
-    }
-  Serial.println();
-  calc_delay = true;
-
-  sprintf(buff,"Nodes:%d",nodes.size());
-  }
-
-
-void nodeTimeAdjustedCallback(int32_t offset) 
-  {
-  Serial.printf("Adjusted time %u Offset = %d\n", mesh.getNodeTime(),offset);
-  }
-
-
-void onNodeDelayReceived(uint32_t nodeId, int32_t delay)
-  {
-  Serial.printf("Delay from node:%u delay = %d\n", nodeId,delay);
-  }
-
-
-void reconnect()
-{
-  //byte mac[6];
-  char MAC[9];
-  int i;
-
-  // unique string
-  //WiFi.macAddress(mac);
-  //sprintf(MAC,"%02X",mac[2],mac[3],mac[4],mac[5]);
-  sprintf(MAC, "%08X",(uint32_t)ESP.getEfuseMac());  // generate unique addresss.
-  // Loop until we're reconnected
-  while (!mqttClient.connected()) 
-    {
-    Serial.println("Attempting MQTT connection...");    
-    // Attemp to connect
-    if (mqttClient.connect(/*MQTT_CLIENT_NAME*/MAC)) 
-      {
-      Serial.println("Connected");  
-      mqttClient.publish(PUBPLISHFROMGATEWAYSUFFIX,"Ready!");
-      mqttClient.subscribe(SUBSCRIBESUFFIX "#");
-      } 
-    else
-      {
-      Serial.print("Failed, rc=");
-      Serial.print(mqttClient.state());
-      Serial.println(" try again in 2 seconds");
-      // Wait 2 seconds before retrying
-      delay(2000);
-      mesh.update();
-      mqttClient.loop();
-      }
-    }
-}
-
-void start_mesh() 
-  {
-
-  //mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | MSG_TYPES | REMOTE ); // all types on except GENERAL
-  //mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE ); // all types on
   mesh.setDebugMsgTypes( ERROR | STARTUP | CONNECTION );  // set before init() so that you can see startup messages
 
-  // Channel set to 1. Make sure to use the same channel for your mesh and for you other
+  // Channel set to 6. Make sure to use the same channel for your mesh and for you other
   // network (STATION_SSID)
-  mesh.init( MESH_PREFIX, MESH_PASSWORD, MESH_PORT, WIFI_AP_STA );
+  mesh.init( MESH_PREFIX, MESH_PASSWORD, MESH_PORT, WIFI_AP_STA, 6 );
   mesh.onReceive(&receivedCallback);
-  mesh.onNewConnection(&newConnectionCallback);
-  mesh.onChangedConnections(&changedConnectionCallback);
-  mesh.onNodeTimeAdjusted(&nodeTimeAdjustedCallback);
 
   mesh.stationManual(STATION_SSID, STATION_PASSWORD);
   mesh.setHostname(HOSTNAME);
@@ -221,56 +89,83 @@ void start_mesh()
   mesh.setRoot(true);
   // This node and all other nodes should ideally know the mesh contains a root, so call this on all nodes
   mesh.setContainsRoot(true);
+}
 
-  // if you want your node to accept OTA firmware, simply include this line
-  // with whatever role you want your hardware to be. For instance, a
-  // mesh network may have a thermometer, rain detector, and bridge. Each of
-  // those may require different firmware, so different roles are preferrable.
-  //
-  // MAKE SURE YOUR UPLOADED OTA FIRMWARE INCLUDES OTA SUPPORT OR YOU WILL LOSE
-  // THE ABILITY TO UPLOAD MORE FIRMWARE OVER OTA. YOU ALSO WANT TO MAKE SURE
-  // THE ROLES ARE CORRECT
-  mesh.initOTAReceive("bridge");
-
-  sprintf(buff,"Id:%d",mesh.getNodeId());
-  
-  mqttClient.setServer(mqttBroker, MQTTPORT);
-  mqttClient.setCallback(mqttCallback);  
-  mqttClient.setClient(wifiClient);
-  }
-
-
-
-
-
-extern "C" void app_main(void) 
-  {
-
-  start_mesh();
+extern "C" void app_main(void) {
+  ESP_LOGI("MAIN", "Running setup");
+  my_setup();
+  ESP_LOGI("MAIN", "Update mesh");
   mesh.update();
-
-  
+  ESP_LOGI("MAIN", "Enter mqtt loop");
   mqttClient.loop();
+  ESP_LOGI("MAIN", "Finish mqtt loop");
 
-  if(myIP != getlocalIP())
-    {
+
+
+  if(myIP != getlocalIP()){
     myIP = getlocalIP();
     Serial.println("My IP is " + myIP.toString());
-    initialized = 1;
-    }
-  if ( ( millis() >= nexttime ) && ( initialized ) )
-    {
-    nexttime=millis()+CHECKCONNDELTA*1000;
-    if (!mqttClient.connected()) 
-      {reconnect();}
-    }
-  
+    ESP_LOGI("MAIN", "My IP is %s", myIP.toString().c_str());
 
+    if (mqttClient.connect("painlessMeshClient")) {
+      ESP_LOGI("MAIN", "Connected to MQTT broker");
+      mqttClient.publish("painlessMesh/from/gateway","Ready!");
+      mqttClient.subscribe("painlessMesh/to/#");
+    } 
   }
+}
 
+void receivedCallback( const uint32_t &from, const String &msg ) {
+  Serial.printf("bridge: Received from %u msg=%s\n", from, msg.c_str());
+  ESP_LOGI("DEBUG", "Received Callback");
+  String topic = "painlessMesh/from/" + String(from);
+  mqttClient.publish(topic.c_str(), msg.c_str());
+}
 
+void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
+  ESP_LOGI("DEBUG", "mqtt Callback");
+  char* cleanPayload = (char*)malloc(length+1);
+  memcpy(cleanPayload, payload, length);
+  cleanPayload[length] = '\0';
+  String msg = String(cleanPayload);
+  free(cleanPayload);
 
-  IPAddress getlocalIP() 
+  String targetStr = String(topic).substring(16);
+
+  if(targetStr == "gateway")
   {
-  return IPAddress(mesh.getStationIP());
+    if(msg == "getNodes")
+    {
+      auto nodes = mesh.getNodeList(true);
+      String str;
+      for (auto &&id : nodes)
+        str += String(id) + String(" ");
+      mqttClient.publish("painlessMesh/from/gateway", str.c_str());
+    }
   }
+  else if(targetStr == "broadcast") 
+  {
+    mesh.sendBroadcast(msg);
+  }
+  else
+  {
+    uint32_t target = strtoul(targetStr.c_str(), NULL, 10);
+    if(mesh.isConnected(target))
+    {
+      mesh.sendSingle(target, msg);
+    }
+    else
+    {
+      mqttClient.publish("painlessMesh/from/gateway", "Client not connected!");
+    }
+  }
+}
+
+IPAddress getlocalIP() {
+  return IPAddress(mesh.getStationIP());
+}
+
+
+
+
+
