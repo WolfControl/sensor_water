@@ -29,4 +29,4 @@ jobs:
         run: pip install -U platformio
 
       - name: Build PlatformIO Project
-        run: pio ci /home/runner/work/collector/collector
+        run: pio ci /home/runner/work/collector/collector --project-conf platformio.ini
