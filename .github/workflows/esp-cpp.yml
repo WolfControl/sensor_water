@@ -1,3 +1,4 @@
+# Workflow for PlatformIO Project
 name: ESP-cpp CI
 
 on:
@@ -12,13 +13,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v2
-      with:
-        submodules: 'recursive'
-    - name: esp-idf build
-      uses: espressif/esp-idf-ci-action@v1
-      with:
-        esp_idf_version: v4.4
-        target: esp32
-        path: './'
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install PlatformIO
+        run: pip install -U platformio
+
+      - name: Build PlatformIO Project
+        run: pio run
