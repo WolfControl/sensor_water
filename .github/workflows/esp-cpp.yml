@@ -14,6 +14,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          path: /collector
       - uses: actions/cache@v3
         with:
           path: |
@@ -32,4 +34,4 @@ jobs:
         run: ls ~/collector
 
 #      - name: Build PlatformIO Project
-#        run: pio ci ~/collector
+#        run: pio ci /collector
