@@ -26,4 +26,4 @@ jobs:
 
       # Working but fails to find wifi.h?
       - name: Build PlatformIO Project
-        run: pio run
+        run: pio ci -c platformio.ini
