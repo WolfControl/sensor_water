@@ -13,6 +13,7 @@
 //
 //************************************************************
 
+#include <Arduino.h>
 #include "painlessMesh.h"
 #include "PubSubClient.h"
 #include "WifiClient.h"
@@ -27,7 +28,7 @@
 #include "nvs_flash.h"
 
 
-// PainlessMesh credentials ( name, password and port ): You should change these
+// PainlessMesh credentials ( name, password and port )
 #define   MESH_PREFIX     "whateverYouLike"
 #define   MESH_PASSWORD   "somethingSneaky"
 #define   MESH_PORT       5555
@@ -42,9 +43,10 @@
 void receivedCallback( const uint32_t &from, const String &msg );
 void mqttCallback(char* topic, byte* payload, unsigned int length);
 
+
 IPAddress getlocalIP();
 IPAddress myIP(0,0,0,0);
-IPAddress mqttBroker(127,0,0,1);
+IPAddress mqttBroker(127, 0, 0, 1);
 
 #define mqttPort 1883
 
@@ -69,9 +71,15 @@ PubSubClient mqttClient(mqttBroker, mqttPort, mqttCallback, wifiClient);
 
 
 void my_setup() {
+
+
+
+}
+
+extern "C" void app_main(void) {
+  initArduino();
   Serial.begin(115200);
-  ESP_LOGI("SETUP", "Initializing flash storage");
-  esp_err_t ret = nvs_flash_init();
+  //esp_err_t ret = nvs_flash_init();
 
   ESP_LOGI("SETUP", "Starting painlessMesh MQTT bridge node");
 
@@ -89,31 +97,30 @@ void my_setup() {
   mesh.setRoot(true);
   // This node and all other nodes should ideally know the mesh contains a root, so call this on all nodes
   mesh.setContainsRoot(true);
-}
+  
+  while (true) {
+    mesh.update();
+    mqttClient.loop();
 
-extern "C" void app_main(void) {
-  ESP_LOGI("MAIN", "Running setup");
-  my_setup();
-  ESP_LOGI("MAIN", "Update mesh");
-  mesh.update();
-  ESP_LOGI("MAIN", "Enter mqtt loop");
-  mqttClient.loop();
-  ESP_LOGI("MAIN", "Finish mqtt loop");
+    if(myIP != getlocalIP()){
+      myIP = getlocalIP();
+      Serial.println("My IP is " + myIP.toString());
+      ESP_LOGI("MAIN", "My IP is %s", myIP.toString().c_str());
 
-
-
-  if(myIP != getlocalIP()){
-    myIP = getlocalIP();
-    Serial.println("My IP is " + myIP.toString());
-    ESP_LOGI("MAIN", "My IP is %s", myIP.toString().c_str());
-
-    if (mqttClient.connect("painlessMeshClient")) {
-      ESP_LOGI("MAIN", "Connected to MQTT broker");
-      mqttClient.publish("painlessMesh/from/gateway","Ready!");
-      mqttClient.subscribe("painlessMesh/to/#");
-    } 
+      if (mqttClient.connect("painlessMeshClient")) {
+        ESP_LOGI("MAIN", "Connected to MQTT broker");
+        mqttClient.publish("painlessMesh/from/gateway","Ready!");
+        mqttClient.subscribe("painlessMesh/to/#");
+    }
+    else {
+      ESP_LOGI("MAIN", "Failed to connect to MQTT broker");
+    }
   }
+  vTaskDelay(1000 / portTICK_PERIOD_MS); // 1 second delay    
+  }
+
 }
+
 
 void receivedCallback( const uint32_t &from, const String &msg ) {
   Serial.printf("bridge: Received from %u msg=%s\n", from, msg.c_str());
