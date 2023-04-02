@@ -46,15 +46,15 @@ void mqttCallback(char* topic, byte* payload, unsigned int length);
 
 IPAddress getlocalIP();
 IPAddress myIP(0,0,0,0);
-IPAddress mqttBroker(127, 0, 0, 1);
+IPAddress mqttBroker(192, 168, 1, 13);
 
 #define mqttPort 1883
 
 
 // topic's suffix: everyone can publish/subscribe to this public broker,
 // you have to change the following 2 defines
-#define PUBPLISHSUFFIX             "painlessMesh/from/"
-#define SUBSCRIBESUFFIX            "painlessMesh/to/"
+#define PUBPLISHSUFFIX             "CollectorMesh/from/"
+#define SUBSCRIBESUFFIX            "CollectorMesh/to/"
 
 #define PUBPLISHFROMGATEWAYSUFFIX  PUBPLISHSUFFIX "gateway"
 
@@ -81,7 +81,7 @@ extern "C" void app_main(void) {
   Serial.begin(115200);
   //esp_err_t ret = nvs_flash_init();
 
-  ESP_LOGI("SETUP", "Starting painlessMesh MQTT bridge node");
+  ESP_LOGI("SETUP", "Starting CollectorMesh MQTT bridge node");
 
   mesh.setDebugMsgTypes( ERROR | STARTUP | CONNECTION );  // set before init() so that you can see startup messages
 
@@ -107,10 +107,10 @@ extern "C" void app_main(void) {
       Serial.println("My IP is " + myIP.toString());
       ESP_LOGI("MAIN", "My IP is %s", myIP.toString().c_str());
 
-      if (mqttClient.connect("painlessMeshClient")) {
+      if (mqttClient.connect("CollectorMeshClient","collector","esp32secret")) {
         ESP_LOGI("MAIN", "Connected to MQTT broker");
-        mqttClient.publish("painlessMesh/from/gateway","Ready!");
-        mqttClient.subscribe("painlessMesh/to/#");
+        mqttClient.publish("CollectorMesh/from/gateway","Ready!");
+        mqttClient.subscribe("CollectorMesh/to/#");
     }
     else {
       ESP_LOGI("MAIN", "Failed to connect to MQTT broker");
@@ -125,7 +125,7 @@ extern "C" void app_main(void) {
 void receivedCallback( const uint32_t &from, const String &msg ) {
   Serial.printf("bridge: Received from %u msg=%s\n", from, msg.c_str());
   ESP_LOGI("DEBUG", "Received Callback");
-  String topic = "painlessMesh/from/" + String(from);
+  String topic = "CollectorMesh/from/" + String(from);
   mqttClient.publish(topic.c_str(), msg.c_str());
 }
 
@@ -147,7 +147,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
       String str;
       for (auto &&id : nodes)
         str += String(id) + String(" ");
-      mqttClient.publish("painlessMesh/from/gateway", str.c_str());
+      mqttClient.publish("CollectorMesh/from/gateway", str.c_str());
     }
   }
   else if(targetStr == "broadcast") 
@@ -163,7 +163,7 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
     }
     else
     {
-      mqttClient.publish("painlessMesh/from/gateway", "Client not connected!");
+      mqttClient.publish("CollectorMesh/from/gateway", "Client not connected!");
     }
   }
 }
