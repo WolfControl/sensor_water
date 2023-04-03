@@ -62,24 +62,17 @@ painlessMesh  mesh;
 WiFiClient wifiClient;
 PubSubClient mqttClient(mqttBroker, mqttPort, mqttCallback, wifiClient);
 
-//#define CHECKCONNDELTA 60     // check interval ( seconds ) for mqtt connection
-//Scheduler userScheduler;   // to control your personal task
 
 //************************************************************
 // bingbong
 //************************************************************
 
 
-void my_setup() {
-
-
-
-}
-
-extern "C" void app_main(void) {
+void my_setup()
+{
   initArduino();
   Serial.begin(115200);
-  //esp_err_t ret = nvs_flash_init();
+  esp_err_t ret = nvs_flash_init();
 
   ESP_LOGI("SETUP", "Starting CollectorMesh MQTT bridge node");
 
@@ -93,11 +86,33 @@ extern "C" void app_main(void) {
   mesh.stationManual(STATION_SSID, STATION_PASSWORD);
   mesh.setHostname(HOSTNAME);
 
-  // Bridge node, should (in most cases) be a root node. See [the wiki](https://gitlab.com/painlessMesh/painlessMesh/wikis/Possible-challenges-in-mesh-formation) for some background
+  // Bridge node, should (in most cases) be a root node
   mesh.setRoot(true);
   // This node and all other nodes should ideally know the mesh contains a root, so call this on all nodes
   mesh.setContainsRoot(true);
+
+}
+
+void publishTask(void* pvParameters)
+{
+  while (true) {
+    if (mqttClient.connected()) {
+      String msg = "Hello from node " + String(mesh.getNodeId());
+      // Not working, nothing showing in influxdb or mosquitto logs
+      mqttClient.publish("CollectorMesh/to/gateway", msg.c_str());
+    }
+    vTaskDelay(5000 / portTICK_PERIOD_MS); // 5 second delay
+  }
+}
+
+
+extern "C" void app_main(void)
+{
+  my_setup();
   
+  xTaskCreate(&publishTask, "publishTask", 4096, NULL, 1, NULL);
+
+
   while (true) {
     mesh.update();
     mqttClient.loop();
@@ -122,14 +137,16 @@ extern "C" void app_main(void) {
 }
 
 
-void receivedCallback( const uint32_t &from, const String &msg ) {
+void receivedCallback( const uint32_t &from, const String &msg )
+{
   Serial.printf("bridge: Received from %u msg=%s\n", from, msg.c_str());
   ESP_LOGI("DEBUG", "Received Callback");
   String topic = "CollectorMesh/from/" + String(from);
   mqttClient.publish(topic.c_str(), msg.c_str());
 }
 
-void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
+void mqttCallback(char* topic, uint8_t* payload, unsigned int length)
+{
   ESP_LOGI("DEBUG", "mqtt Callback");
   char* cleanPayload = (char*)malloc(length+1);
   memcpy(cleanPayload, payload, length);
@@ -168,7 +185,8 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   }
 }
 
-IPAddress getlocalIP() {
+IPAddress getlocalIP()
+{
   return IPAddress(mesh.getStationIP());
 }
 
