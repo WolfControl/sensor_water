@@ -1,51 +1,32 @@
-//  FARM DATA RELAY SYSTEM
-//
-//  ESP-NOW Sensor Example
-//
-//  Developed by Timm Bogner (timmbogner@gmail.com) in Urbana, Illinois, USA.
-//  An example of how to send data via ESP-NOW using FDRS.
-//
+// Firmware for ESP32 Based Hydroponics Controller
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/event_groups.h"
 #include "esp_system.h"
-//#include "esp_spiffs.h"
 #include "esp_event.h"
-#include "sensor_config.h"
-#include <fdrs_node.h>
+#include "esp_wifi.h"
+#include "nvs_flash.h"
+#include "esp_log.h"
 
-float data1;
-float data2;
+// Hardcoded Wifi and MQTT Settings
+#define WIFI_SSID "SigmaNet"
+#define WIFI_PASSWORD "YourPassword"
 
-float readTemp() {
-  return 22.069;
-}
+#define MQTT_SERVER "mqtt://your-mqtt-server"
+#define MQTT_PORT 1883
 
-float readHum() {
-  return random(0, 100);
-}
 
 void my_setup()
 {
-beginFDRS();
-initArduino();
-//Serial.begin(115200);
+  // Setup Wifi
 
-}
+  // Create Sensor Objects
 
-void sensor_loop() {
-  data1 = readHum();
-  loadFDRS(data1, HUMIDITY_T);
-  data2 = readTemp();
-  loadFDRS(data2, TEMP_T);
-//  DBG(sendFDRS());
-    if(sendFDRS()){
-      DBG("Big Success!");
-    } else {
-      DBG("Nope, not so much.");
-    }
-  vTaskDelay(10000 / portTICK_PERIOD_MS);
-  //sleepFDRS(10);  //Sleep time in seconds
+  // Create new RTOS tasks for each sensor
+
+  // Setup MQTT
+
+
 }
 
 
