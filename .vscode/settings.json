@@ -48,5 +48,6 @@
         "streambuf": "cpp",
         "cinttypes": "cpp",
         "typeinfo": "cpp"
-    }
+    },
+    "ansible.python.interpreterPath": "c:\\Users\\James\\AppData\\Local\\Microsoft\\WindowsApps\\python3.10.exe"
 }
