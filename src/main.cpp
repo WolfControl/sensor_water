@@ -6,8 +6,6 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "freertos/semphr.h"
-
-
 #include "WiFi.h"
 #include <PubSubClient.h>
 
@@ -15,12 +13,18 @@
 #include <Wire.h>
 #include "nvs_flash.h"
 
+// Feature flags for testing
+#define USE_WIFI 1
+#define USE_MQTT 0
+#define USE_SENSORS 1
+
 // Global constants, vars, and initializations
-#define WIFI_SSID "MyNetwork"
+#define WIFI_SSID "SigmaNet"
 #define WIFI_PASSWORD "MyPassword"
 
-#define MQTT_SERVER "mqtt://your-mqtt-server"
+#define MQTT_SERVER "192.168.1.13"
 #define MQTT_PORT 1883
+PubSubClient mqtt_client;
 
 SemaphoreHandle_t i2c_semaphore = NULL;
 
@@ -35,9 +39,8 @@ struct Device {
 };
 
 Device device_list[] = {
-  {Ezo_board(99, "PH"), 1000, "hydroponics/ph"},
+  {Ezo_board(99, "PH"), 1000, "hydroponics/ph"}
   //{Ezo_board(100, "EC"), 2000, "hydroponics/ec"},
-  // add more devices here...
 };
 
 void wifi_setup()
@@ -63,6 +66,7 @@ void mqtt_setup()
 {
   mqtt_client.setServer(MQTT_SERVER, MQTT_PORT);
 
+
   //TODO: failure and retry handling
 }
 
@@ -80,7 +84,10 @@ void sensor_loop(void* parameter)
     float reading = device->board.get_last_received_reading();
     sprintf(result, "%.2f", reading); // convert float to string
 
-    mqtt_client.publish(device->mqttTopic, result);
+    if (USE_MQTT) {
+      mqtt_client.publish(device->mqttTopic, result);
+    }
+    
     ESP_LOGI("SENSOR", "Published reading: %s = %s", device->mqttTopic, result);
 
     vTaskDelay(device->pollingRate / portTICK_PERIOD_MS);
@@ -92,24 +99,31 @@ void sensor_loop(void* parameter)
 
 void my_setup()
 {
-  wifi_setup();
-
-  mqtt_setup();
-
-  // Create new RTOS tasks for each sensor
-  for (int i = 0; i < sizeof(device_list); i++)
-  {
-    //xTaskCreate
+  if (USE_WIFI) {
+    wifi_setup();
   }
+
+  if (USE_MQTT) {
+    mqtt_setup();
+  }
+
+  if (USE_SENSORS) {
+    // Create new RTOS tasks for each sensor
+    for (int i = 0; i < sizeof(device_list); i++)
+    {
+      xTaskCreate(sensor_loop, device_list[i].board.get_name(), 2048, &device_list[i], 5, NULL);
+    }
+  }
+  
 }
 
 extern "C" void app_main(void)
 {
   my_setup();
 
-  while(1)
-  {
+  //while(1)
+  //{
 
-  }
+  //}
   
 }
