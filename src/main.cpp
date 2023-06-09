@@ -1,36 +1,20 @@
-// Firmware for ESP32 Based Hydroponics Controller
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "freertos/semphr.h"
-#include "WiFi.h"
-#include <PubSubClient.h>
-
+#include "esp_now.h"
+#include "esp_wifi.h"
 #include <Ezo_i2c.h>
 #include <Wire.h>
 #include "nvs_flash.h"
 
-// Feature flags for testing
-#define USE_WIFI 1
-#define USE_MQTT 0
-#define USE_SENSORS 1
-
-// Global constants, vars, and initializations
-#define WIFI_SSID "SigmaNet"
-#define WIFI_PASSWORD "MyPassword"
-
-#define MQTT_SERVER "192.168.1.13"
-#define MQTT_PORT 1883
-PubSubClient mqtt_client;
-
+/*---------- Sensor Related Globals & Stubs ----------*/
 SemaphoreHandle_t i2c_semaphore = NULL;
 
 Ezo_board PH = Ezo_board(99, "PH");
 //Ezo_board EC = Ezo_board(100, "EC");
-
 
 struct Device {
   Ezo_board board; // How to be agnostic of ezo_board library?
@@ -43,32 +27,35 @@ Device device_list[] = {
   //{Ezo_board(100, "EC"), 2000, "hydroponics/ec"},
 };
 
-void wifi_setup()
-{
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+/*---------- ESP NOW Related Globals & Stubs ----------*/
 
-  ESP_LOGI("WIFI", "Attempting to connect to %s", WIFI_SSID);
-  while(WiFi.status() != WL_CONNECTED)
-  {
-    vTaskDelay(500);
-    ESP_LOGI("WIFI", "Connecting to %s", WIFI_SSID);
-  }
+// Address of the ESP NOW receiver
+uint8_t broadcastAddress[] = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC};
 
-  ESP_LOGI("WIFI", "Connected to %s", WIFI_SSID);
-  ESP_LOGI("WIFI", "IP Address: %s", WiFi.localIP().toString().c_str());
+// Structure of the data to be sent
+typedef struct struct_message {
+  char a[32];
+  int b;
+  float c;
+  bool d;
+} struct_message;
 
-  //TODO: failure and retry handling
+// Create a struct_message called myData
+struct_message myData;
 
+// Create a variable to hold a pointer to the peer
+esp_now_peer_info_t peerInfo;
+
+
+/*---------- Callback Functions ----------*/
+
+// Callback function that will be executed when data is sent over ESP NOW
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  
+  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
 }
 
-void mqtt_setup()
-{
-  mqtt_client.setServer(MQTT_SERVER, MQTT_PORT);
-
-
-  //TODO: failure and retry handling
-}
+/*---------- Other Functions ----------*/
 
 void sensor_loop(void* parameter)
 {
@@ -78,42 +65,60 @@ void sensor_loop(void* parameter)
   while(1) {
     xSemaphoreTake(i2c_semaphore, portMAX_DELAY);
     device->board.send_read_cmd();
-    xSemaphoreGive(i2c_semaphore);
 
     device->board.receive_read_cmd();
     float reading = device->board.get_last_received_reading();
+
+    // Release the I2C bus
+    xSemaphoreGive(i2c_semaphore);
+
     sprintf(result, "%.2f", reading); // convert float to string
 
-    if (USE_MQTT) {
-      mqtt_client.publish(device->mqttTopic, result);
+    // Send message via ESP-NOW
+    esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
+    
+    if (result == ESP_OK) {
+      ESP_LOGI("SENSOR", "Published reading: FILL IN HERE");
+    }
+    else {
+      ESP_LOGW("SENSOR", "Error sending the data");
     }
     
-    ESP_LOGI("SENSOR", "Published reading: %s = %s", device->mqttTopic, result);
-
+    }
     vTaskDelay(device->pollingRate / portTICK_PERIOD_MS);
-  }
 }
-
-
-
 
 void my_setup()
 {
-  if (USE_WIFI) {
-    wifi_setup();
+
+  ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
+
+  if (esp_now_init() != ESP_OK) {
+    ESP_LOGE("ESP-NOW", "Error initializing ESP-NOW");
+    return;
   }
 
-  if (USE_MQTT) {
-    mqtt_setup();
+  // Register send callback
+  esp_now_register_send_cb(OnDataSent);
+
+  //Register peer
+  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+  peerInfo.channel = 0;
+  peerInfo.encrypt = false;
+
+  //Add peer
+  if (esp_now_add_peer(&peerInfo) != ESP_OK){
+    ESP_LOGE("ESPNOW", "Failed to add peer");
+    return;
   }
 
-  if (USE_SENSORS) {
-    // Create new RTOS tasks for each sensor
-    for (int i = 0; i < sizeof(device_list); i++)
-    {
-      xTaskCreate(sensor_loop, device_list[i].board.get_name(), 2048, &device_list[i], 5, NULL);
-    }
+
+  // Create new RTOS tasks for each sensor
+  for (int i = 0; i < sizeof(device_list); i++)
+  {
+    xTaskCreate(sensor_loop, device_list[i].board.get_name(), 2048, &device_list[i], 5, NULL);
   }
+  
   
 }
 
