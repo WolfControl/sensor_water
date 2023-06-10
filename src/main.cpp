@@ -32,12 +32,13 @@ Device device_list[] = {
 // Address of the ESP NOW receiver
 uint8_t broadcastAddress[] = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC};
 
-// Structure of the data to be sent
+// Create a struct_message to send to the ESP NOW receiver
 typedef struct struct_message {
-  char a[32];
-  int b;
-  float c;
-  bool d;
+  char topic[50];      // MQTT topic to publish to
+  float sensorValue;   // Sensor reading
+  char sensorName[30]; // Name of the sensor
+  char deviceName[30]; // Name or ID of the device sending the message
+  uint32_t timestamp;  // Unix timestamp (seconds since 1970-01-01 00:00:00 UTC)
 } struct_message;
 
 // Create a struct_message called myData
@@ -55,38 +56,7 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
 }
 
-/*---------- Other Functions ----------*/
-
-void sensor_loop(void* parameter)
-{
-  Device* device = (Device*) parameter;
-  char result[30];
-
-  while(1) {
-    xSemaphoreTake(i2c_semaphore, portMAX_DELAY);
-    device->board.send_read_cmd();
-
-    device->board.receive_read_cmd();
-    float reading = device->board.get_last_received_reading();
-
-    // Release the I2C bus
-    xSemaphoreGive(i2c_semaphore);
-
-    sprintf(result, "%.2f", reading); // convert float to string
-
-    // Send message via ESP-NOW
-    esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
-    
-    if (result == ESP_OK) {
-      ESP_LOGI("SENSOR", "Published reading: FILL IN HERE");
-    }
-    else {
-      ESP_LOGW("SENSOR", "Error sending the data");
-    }
-    
-    }
-    vTaskDelay(device->pollingRate / portTICK_PERIOD_MS);
-}
+/*---------- Setup Functions ----------*/
 
 void my_setup()
 {
@@ -121,6 +91,42 @@ void my_setup()
   
   
 }
+
+/*---------- Feature Functions ----------*/
+
+void sensor_loop(void* parameter)
+
+{
+  Device* device = (Device*) parameter;
+  char result[30];
+
+  while(1) {
+    xSemaphoreTake(i2c_semaphore, portMAX_DELAY);
+    device->board.send_read_cmd();
+
+    device->board.receive_read_cmd();
+    float reading = device->board.get_last_received_reading();
+
+    // Release the I2C bus
+    xSemaphoreGive(i2c_semaphore);
+
+    sprintf(result, "%.2f", reading); // convert float to string
+
+    // Send message via ESP-NOW
+    esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
+    
+    if (result == ESP_OK) {
+      ESP_LOGI("SENSOR", "Published reading: FILL IN HERE");
+    }
+    else {
+      ESP_LOGW("SENSOR", "Error sending the data");
+    }
+    
+    }
+    vTaskDelay(device->pollingRate / portTICK_PERIOD_MS);
+}
+
+/*---------- Main Function ----------*/
 
 extern "C" void app_main(void)
 {
