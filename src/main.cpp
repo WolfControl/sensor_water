@@ -53,10 +53,12 @@ esp_now_peer_info_t peerInfo;
 /*---------- Callback Functions ----------*/
 
 // Callback function that will be executed when data is sent over ESP NOW
-void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  
-  ESP_LOGI("ESPNOW", "Sent message struct ESP-NOW receiver");
-  ESP_LOGI("ESPNOW", "Last Packet Send Status: %d", status == ESP_NOW_SEND_SUCCESS);
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
+{
+  static const char *TAG = "OnDataSent";
+
+  ESP_LOGI(TAG, "Sent message struct ESP-NOW receiver");
+  ESP_LOGI(TAG, "Last Packet Send Status: %d", status == ESP_NOW_SEND_SUCCESS);
 
 }
 
@@ -113,8 +115,6 @@ void network_setup()
 void my_setup()
 {
 
-
-
   // Register send callback
   esp_now_register_send_cb(OnDataSent);
 
@@ -128,8 +128,6 @@ void my_setup()
     ESP_LOGE("ESPNOW", "Failed to add peer");
     return;
   }
-
-
   
 }
 
@@ -173,6 +171,7 @@ void sensor_loop(void* parameter)
 
 void send_fakedata(void* parameter)
 {
+  static const char *TAG = "send_fakedata";
     while(1) {
         // Create a cJSON object
         cJSON* json = cJSON_CreateObject();
@@ -191,10 +190,10 @@ void send_fakedata(void* parameter)
         esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) jsonString, strlen(jsonString) + 1); // +1 to include null terminator
 
         if (result == ESP_OK) {
-            ESP_LOGI("SENSOR", "Published reading to ESP-NOW: %s", jsonString);
+            ESP_LOGI(TAG, "Published reading to ESP-NOW: %s", jsonString);
         }
         else {
-            ESP_LOGW("SENSOR", "Error: %s", esp_err_to_name(result));
+            ESP_LOGW(TAG, "Error: %s", esp_err_to_name(result));
         }
 
         // Free the JSON string and cJSON object
@@ -206,33 +205,31 @@ void send_fakedata(void* parameter)
 }
 
 
-
-
 /*---------- Main Function ----------*/
 
 extern "C" void app_main(void)
 {
+  static const char *TAG = "app_main";
 
-  ESP_LOGI("MAIN", "Call OS setup");
+  ESP_LOGI(TAG, "Call OS setup");
   os_setup();
 
-  ESP_LOGI("MAIN", "Call flash setup");
+  ESP_LOGI(TAG, "Call flash setup");
   flash_setup();
 
-  ESP_LOGI("MAIN", "Call network setup");
+  ESP_LOGI(TAG, "Call network setup");
   network_setup();
 
-  ESP_LOGI("MAIN", "Call my setup");
+  ESP_LOGI(TAG, "Call my setup");
   my_setup();
 
-  ESP_LOGI("DEBUG", "Create fake data task");
-  // Create a RTOS task to send fake data
+  ESP_LOGI("DEBUG", "Spawn task to generate and send fake data to ESP-NOW gateway");
   xTaskCreate(send_fakedata, "send_fakedata", 2048, NULL, 5, NULL);
 
   // Create new RTOS tasks for each sensor
   //for (int i = 0; i < sizeof(device_list); i++)
   //{
-    //ESP_LOGI("SENSOR", "Creating task for %s", device_list[i].board.get_name());
+    //ESP_LOGI(TAG, "Creating task for %s", device_list[i].board.get_name());
     //xTaskCreate(sensor_loop, device_list[i].board.get_name(), 2048, &device_list[i], 5, NULL);
   //}
   
