@@ -9,6 +9,7 @@
 #include <Ezo_i2c.h>
 #include <Wire.h>
 #include "nvs_flash.h"
+#include "cJSON.h"
 
 /*---------- Sensor Related Globals & Stubs ----------*/
 SemaphoreHandle_t i2c_semaphore = NULL;
@@ -32,6 +33,7 @@ Device device_list[] = {
 // Address of the ESP NOW receiver
 uint8_t broadcastAddress[] = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC};
 
+
 // Create a struct_message to send to the ESP NOW receiver
 typedef struct struct_message {
   char topic[50];      // MQTT topic to publish to
@@ -53,20 +55,65 @@ esp_now_peer_info_t peerInfo;
 // Callback function that will be executed when data is sent over ESP NOW
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   
-  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+  ESP_LOGI("ESPNOW", "Sent message struct ESP-NOW receiver");
+  ESP_LOGI("ESPNOW", "Last Packet Send Status: %d", status == ESP_NOW_SEND_SUCCESS);
+
 }
 
 /*---------- Setup Functions ----------*/
 
+void os_setup()
+{
+    ESP_LOGI("OS", "Creating default event loop...");
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+}
+
+void flash_setup()
+{
+
+    ESP_LOGI("NVS", "Initializing NVS flash...");
+    esp_err_t ret = nvs_flash_init();
+
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+
+        ESP_LOGW("NVS", "No free pages OR new version found. Erasing...");
+        ESP_ERROR_CHECK(nvs_flash_erase());
+
+        ESP_LOGI("NVS", "Initializing NVS flash again...");
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    ESP_LOGI("NVS", "Flash initialized.");
+}
+
+void network_setup()
+{
+  
+      ESP_LOGI("WIFI", "Initializing tcpip adapter...");
+      ESP_ERROR_CHECK(esp_netif_init());
+  
+      ESP_LOGI("WIFI", "Initializing default station...");
+      esp_netif_create_default_wifi_sta();
+  
+      wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+      ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+  
+      ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+      ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+
+      ESP_ERROR_CHECK(esp_wifi_start());
+
+      if (esp_now_init() != ESP_OK) {
+        ESP_LOGE("ESP-NOW", "Error initializing ESP-NOW");
+        return;
+  }
+}
+
 void my_setup()
 {
 
-  ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
 
-  if (esp_now_init() != ESP_OK) {
-    ESP_LOGE("ESP-NOW", "Error initializing ESP-NOW");
-    return;
-  }
 
   // Register send callback
   esp_now_register_send_cb(OnDataSent);
@@ -83,17 +130,12 @@ void my_setup()
   }
 
 
-  // Create new RTOS tasks for each sensor
-  for (int i = 0; i < sizeof(device_list); i++)
-  {
-    xTaskCreate(sensor_loop, device_list[i].board.get_name(), 2048, &device_list[i], 5, NULL);
-  }
-  
   
 }
 
 /*---------- Feature Functions ----------*/
 
+/*
 void sensor_loop(void* parameter)
 
 {
@@ -126,15 +168,73 @@ void sensor_loop(void* parameter)
     vTaskDelay(device->pollingRate / portTICK_PERIOD_MS);
 }
 
+*/
+
+
+void send_fakedata(void* parameter)
+{
+    while(1) {
+        // Create a cJSON object
+        cJSON* json = cJSON_CreateObject();
+
+        // Add data to the cJSON object
+        cJSON_AddStringToObject(json, "topic", "ESPGateway/from/FakeSensor");
+        cJSON_AddNumberToObject(json, "sensorValue", (rand() % 100) / 10.0);
+        cJSON_AddStringToObject(json, "sensorName", "PH");
+        cJSON_AddStringToObject(json, "deviceName", "Feather_V2");
+        cJSON_AddNumberToObject(json, "timestamp", (uint32_t)time(NULL)); // Get the current time as a Unix timestamp
+
+        // Convert the cJSON object to a JSON string
+        char* jsonString = cJSON_Print(json);
+
+        // Send the JSON string over ESP-NOW
+        esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *) jsonString, strlen(jsonString) + 1); // +1 to include null terminator
+
+        if (result == ESP_OK) {
+            ESP_LOGI("SENSOR", "Published reading to ESP-NOW: %s", jsonString);
+        }
+        else {
+            ESP_LOGW("SENSOR", "Error: %s", esp_err_to_name(result));
+        }
+
+        // Free the JSON string and cJSON object
+        free(jsonString);
+        cJSON_Delete(json);
+
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+    }
+}
+
+
+
+
 /*---------- Main Function ----------*/
 
 extern "C" void app_main(void)
 {
+
+  ESP_LOGI("MAIN", "Call OS setup");
+  os_setup();
+
+  ESP_LOGI("MAIN", "Call flash setup");
+  flash_setup();
+
+  ESP_LOGI("MAIN", "Call network setup");
+  network_setup();
+
+  ESP_LOGI("MAIN", "Call my setup");
   my_setup();
 
-  //while(1)
-  //{
+  ESP_LOGI("DEBUG", "Create fake data task");
+  // Create a RTOS task to send fake data
+  xTaskCreate(send_fakedata, "send_fakedata", 2048, NULL, 5, NULL);
 
+  // Create new RTOS tasks for each sensor
+  //for (int i = 0; i < sizeof(device_list); i++)
+  //{
+    //ESP_LOGI("SENSOR", "Creating task for %s", device_list[i].board.get_name());
+    //xTaskCreate(sensor_loop, device_list[i].board.get_name(), 2048, &device_list[i], 5, NULL);
   //}
+  
   
 }
