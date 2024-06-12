@@ -54,7 +54,7 @@ esp_now_peer_info_t gatewayPeer;
 uint8_t* gatewayAddress;
 SemaphoreHandle_t mutex;
 
-const char* firmwareVersionClient = "0.0.1";
+const char* firmwareVersionClient = "SETDURINGCOMPILATION";
 
 // ---------- messaging.h ---------- //
 
